@@ -6,26 +6,11 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple
 
 import fire
 import torch
-from fairscale.nn.model_parallel.initialize import initialize_model_parallel
 
 from llama import LLaMA, ModelArgs, Tokenizer, Transformer
-
-
-def setup_model_parallel() -> Tuple[int, int]:
-    local_rank = int(os.environ.get("LOCAL_RANK", -1))
-    world_size = int(os.environ.get("WORLD_SIZE", -1))
-
-    torch.distributed.init_process_group("nccl")
-    initialize_model_parallel(world_size)
-    torch.cuda.set_device(local_rank)
-
-    # seed must be the same in all processes
-    torch.manual_seed(1)
-    return local_rank, world_size
 
 
 def load(
@@ -70,7 +55,8 @@ def main(
     max_seq_len: int = 512,
     max_batch_size: int = 32,
 ):
-    local_rank, world_size = setup_model_parallel()
+    local_rank = 0
+    world_size = 1
     if local_rank > 0:
         sys.stdout = open(os.devnull, "w")
 
