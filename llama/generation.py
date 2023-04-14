@@ -1,8 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the GNU General Public License version 3.
 
-from typing import List
-
 import torch
 
 from llama.model import Transformer
@@ -16,11 +14,11 @@ class LLaMA:
 
     def generate(
         self,
-        prompts: List[str],
+        prompts: list[str],
         max_gen_len: int,
         temperature: float = 0.8,
         top_p: float = 0.95,
-    ) -> List[str]:
+    ) -> list[str]:
         bsz = len(prompts)
         params = self.model.params
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)

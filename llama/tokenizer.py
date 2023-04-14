@@ -3,7 +3,6 @@
 
 import os
 from logging import getLogger
-from typing import List
 
 from sentencepiece import SentencePieceProcessor
 
@@ -27,7 +26,7 @@ class Tokenizer:
         )
         assert self.sp_model.vocab_size() == self.sp_model.get_piece_size()
 
-    def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
+    def encode(self, s: str, bos: bool, eos: bool) -> list[int]:
         assert type(s) is str
         t = self.sp_model.encode(s)
         if bos:
@@ -36,5 +35,5 @@ class Tokenizer:
             t = t + [self.eos_id]
         return t
 
-    def decode(self, t: List[int]) -> str:
+    def decode(self, t: list[int]) -> str:
         return self.sp_model.decode(t)
