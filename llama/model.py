@@ -9,13 +9,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-# import fairscale.nn.model_parallel.initialize as fs_init
-# from fairscale.nn.model_parallel.layers import (
-    # ParallelEmbedding,
-    # RowParallelLinear,
-    # ColumnParallelLinear,
-# )
-
 
 @dataclass
 class ModelArgs:
@@ -77,7 +70,7 @@ class Attention(nn.Module):
     def __init__(self, args: ModelArgs):
         super().__init__()
 
-        self.n_local_heads = args.n_heads 
+        self.n_local_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
 
         self.wq = nn.Linear(
@@ -109,9 +102,17 @@ class Attention(nn.Module):
         )
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
+    def forward(
+        self,
+        x: torch.Tensor,
+        start_pos: int,
+        freqs_cis: torch.Tensor,
+        mask: Optional[torch.Tensor],
+    ):
         bsz, seqlen, _ = x.shape
-        xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
+        xq = self.wq(x)
+        xk = self.wk(x)
+        xv = self.wv(x)
 
         xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         xk = xk.view(bsz, seqlen, self.n_local_heads, self.head_dim)
@@ -136,9 +137,7 @@ class Attention(nn.Module):
             scores = scores + mask  # (bs, n_local_heads, slen, cache_len + slen)
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         output = torch.matmul(scores, values)  # (bs, n_local_heads, slen, head_dim)
-        output = output.transpose(
-            1, 2
-        ).contiguous().view(bsz, seqlen, -1)
+        output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
 
         return self.wo(output)
 
@@ -155,13 +154,19 @@ class FeedForward(nn.Module):
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
 
         self.w1 = nn.Linear(
-            dim, hidden_dim, bias=False, 
+            dim,
+            hidden_dim,
+            bias=False,
         )
         self.w2 = nn.Linear(
-            hidden_dim, dim, bias=False, 
+            hidden_dim,
+            dim,
+            bias=False,
         )
         self.w3 = nn.Linear(
-            dim, hidden_dim, bias=False, 
+            dim,
+            hidden_dim,
+            bias=False,
         )
 
     @torch.no_grad()
@@ -184,8 +189,16 @@ class TransformerBlock(nn.Module):
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
-        h = x + self.attention.forward(self.attention_norm(x), start_pos, freqs_cis, mask)
+    def forward(
+        self,
+        x: torch.Tensor,
+        start_pos: int,
+        freqs_cis: torch.Tensor,
+        mask: Optional[torch.Tensor],
+    ):
+        h = x + self.attention.forward(
+            self.attention_norm(x), start_pos, freqs_cis, mask
+        )
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
 
@@ -197,9 +210,7 @@ class Transformer(nn.Module):
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
 
-        self.tok_embeddings = nn.Embedding(
-            params.vocab_size, params.dim
-        )
+        self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
@@ -207,7 +218,9 @@ class Transformer(nn.Module):
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = nn.Linear(
-            params.dim, params.vocab_size, bias=False,
+            params.dim,
+            params.vocab_size,
+            bias=False,
         )
 
         self.freqs_cis = precompute_freqs_cis(
@@ -223,7 +236,9 @@ class Transformer(nn.Module):
 
         mask = None
         if seqlen > 1:
-            mask = torch.full((1, 1, seqlen, seqlen), float("-inf"), device=tokens.device)
+            mask = torch.full(
+                (1, 1, seqlen, seqlen), float("-inf"), device=tokens.device
+            )
             mask = torch.triu(mask, diagonal=start_pos + 1).type_as(h)
 
         for layer in self.layers:
